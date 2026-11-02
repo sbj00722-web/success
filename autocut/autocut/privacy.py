@@ -1,6 +1,8 @@
 """개인정보 찾기: 화면 속 글자(OCR) → 모자이크 박스, 말로 나온 것 → 삐- 구간."""
 import re
+import time
 
+import cv2
 import numpy as np
 
 from . import llm, media
@@ -9,7 +11,7 @@ PATTERNS = {
     "휴대폰번호": r"01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}",
     "전화번호": r"0\d{1,2}[-.)\s]\d{3,4}[-.\s]\d{4}",
     "주민등록번호": r"\d{6}\s?[-–]\s?[1-4][\d*]{6}",
-    "이메일": r"[\w.+-]+@[\w-]+\.[\w.]+",
+    "이메일": r"[\w.+-]+@[\w-]{3,}",  # OCR 이 '.' 을 자주 빠뜨려서(gmailcom) 점은 요구하지 않음
     "카드번호": r"\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}",
     "계좌번호": r"\d{3,6}-\d{2,6}-\d{2,8}",
     "차량번호": r"\d{2,3}\s?[가-힣]\s?\d{4}",
@@ -48,17 +50,20 @@ def screen_pii(video: str, info, settings, log):
 
     reader = easyocr.Reader(["ko", "en"], gpu=torch.cuda.is_available(), verbose=False)
     step = 1.0 / settings.ocr_fps
-    ocr_w = min(1280, info.width)
+    ocr_w = min(settings.ocr_width, info.width)
     scale = info.width / ocr_w
+    total = max(1, int(info.duration / step))
 
     hits = []   # (t, box, text)
-    for t, frame in media.sample_frames(video, step, ocr_w):
-        for box, text, conf in reader.readtext(frame):
-            if conf < 0.2 or len(text.strip()) < 2:
-                continue
-            xs, ys = [p[0] for p in box], [p[1] for p in box]
-            hits.append((t, (min(xs) * scale, min(ys) * scale, max(xs) * scale, max(ys) * scale), text))
-    log(f"  OCR 글자 {len(hits)}개 검사")
+    started = time.time()
+    for i, (t, items) in enumerate(_ocr_frames(reader, media.sample_frames(video, step, ocr_w))):
+        for (x0, y0, x1, y1), _, text, conf in items:
+            if conf >= 0.2 and len(text.strip()) >= 2:
+                hits.append((t, (x0 * scale, y0 * scale, x1 * scale, y1 * scale), text))
+        if (i + 1) % 60 == 0:
+            spent = time.time() - started
+            log(f"  OCR {i + 1}/{total} 프레임, 남은 시간 약 {spent / (i + 1) * (total - i - 1):.0f}초")
+    log(f"  OCR 글자 {len(hits)}개 검사 ({time.time() - started:.0f}초)")
 
     flagged = {}
     for i, (_, _, text) in enumerate(hits):
@@ -90,6 +95,59 @@ def screen_pii(video: str, info, settings, log):
     return _merge_boxes(boxes)
 
 
+def _crop(gray, box):
+    x0, y0, x1, y1 = (int(v) for v in box)
+    return gray[y0:y1, x0:x1].astype(np.int16)
+
+
+def _unchanged(a, b) -> bool:
+    """두 이미지가 같은 내용인지. 평균 대신 '뚜렷하게 바뀐 점 개수'로 봐야
+    자막에서 숫자 한 글자만 바뀌거나 작은 글자가 새로 나타난 것도 잡힘."""
+    return a.shape == b.shape and np.count_nonzero(np.abs(a - b) > 40) < 4
+
+
+def _box_iou(a, b):
+    ix = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / (union + 1e-6)
+
+
+def _ocr_frames(reader, frames):
+    """프레임마다 [(상자, 상자 속 이미지, 글자, 신뢰도)].
+    영상 대부분은 앞 프레임과 거의 같으므로, 화면이 그대로면 통째로 건너뛰고
+    글자 상자 속이 그대로면 예전에 읽은 글자를 재사용해서 바뀐 글자만 새로 읽음."""
+    prev_gray, prev = None, []
+    for t, frame in frames:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        g16 = gray.astype(np.int16)
+        if prev_gray is not None and _unchanged(g16, prev_gray):
+            yield t, prev
+            continue
+        prev_gray = g16
+
+        horizontal, free = reader.detect(frame)
+        items, new_boxes = [], []
+        for x0, x1, y0, y1 in horizontal[0]:
+            box = (max(0, x0), max(0, y0), x1, y1)
+            # 예전 상자 자리를 지금 화면에서 잘라 비교 (검출 상자가 1px 흔들려도 재사용 가능)
+            old = next((p for p in prev if _box_iou(p[0], box) > 0.6
+                        and _unchanged(_crop(gray, p[0]), p[1])), None)
+            if old:
+                items.append(old)
+            else:
+                new_boxes.append([box[0], box[2], box[1], box[3]])
+        # 상자를 하나도 안 넘기면 easyocr 가 화면 전체를 읽으므로 새 상자가 있을 때만 호출
+        if new_boxes or free[0]:
+            for pts, text, conf in reader.recognize(gray, horizontal_list=new_boxes, free_list=free[0]):
+                xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+                box = (max(0, min(xs)), max(0, min(ys)), max(xs), max(ys))
+                items.append((box, _crop(gray, box), text, conf))
+        prev = items
+        yield t, items
+
+
 def _iou(a, b):
     ix = max(0, min(a[4], b[4]) - max(a[2], b[2]))
     iy = max(0, min(a[5], b[5]) - max(a[3], b[3]))
@@ -114,7 +172,6 @@ def _merge_boxes(boxes):
 
 
 def pixelate(frame: np.ndarray, x0, y0, x1, y1):
-    import cv2
     x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
     roi = frame[y0:y1, x0:x1]
     h, w = roi.shape[:2]

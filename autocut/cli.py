@@ -20,6 +20,7 @@ def main():
     p.add_argument("--illustration-mode", choices=["full", "pip"], default="full")
     p.add_argument("--no-review", action="store_true", help="일러스트 재검토 생략 (비용 절감)")
     p.add_argument("--no-pii", action="store_true", help="개인정보 처리 끄기")
+    p.add_argument("--ocr-every", type=float, default=1.0, help="화면 글자 검사 간격(초)")
     a = p.parse_args()
 
     s = Settings(
@@ -27,7 +28,7 @@ def main():
         cut_silence=not a.no_silence, cut_fillers=not a.no_fillers, cut_retakes=not a.no_retakes,
         illustrations=not a.no_illustrations, max_illustrations=a.max_illustrations,
         illustration_mode=a.illustration_mode, illustration_review=not a.no_review,
-        pii_screen=not a.no_pii, pii_audio=not a.no_pii,
+        pii_screen=not a.no_pii, pii_audio=not a.no_pii, ocr_fps=1.0 / a.ocr_every,
     )
     os.makedirs(a.out, exist_ok=True)
     run(a.video, a.out, s)

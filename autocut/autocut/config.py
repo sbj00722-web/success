@@ -34,6 +34,7 @@ class Settings:
     pii_audio: bool = True           # 말로 나온 개인정보 삐- 처리
     pii_llm_check: bool = True       # 정규식 외에 Claude가 OCR 글자를 한 번 더 검사
     ocr_fps: float = 1.0             # 초당 몇 프레임을 OCR 할지
+    ocr_width: int = 960             # OCR 할 때 줄이는 가로 크기 (클수록 작은 글자도 읽지만 느림)
 
     # Claude
     model: str = "claude-opus-5-5"
