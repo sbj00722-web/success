@@ -1,0 +1,21 @@
+# 비밀 정보 (API 키) - 절대 올리지 않기
+.env
+.env.*
+api_key.txt
+
+# 파이썬 가상환경 / 캐시
+.venv/
+__pycache__/
+*.pyc
+
+# 편집 결과물과 중간 파일 (영상은 용량이 큼)
+output/
+*_work/
+*.mp4
+*.mov
+*.wav
+
+# 기타
+.gradio/
+.DS_Store
+Thumbs.db
