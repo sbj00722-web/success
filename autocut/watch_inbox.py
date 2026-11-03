@@ -1,5 +1,6 @@
-"""inbox 폴더 지켜보기: 영상을 넣으면 자동으로 편집해서 output 에 저장하고, 원본은 inbox/done 으로 옮김.
-옵션은 python -m autocut 과 같음 (예: python watch_inbox.py --blur-faces)."""
+"""claude_success 폴더 지켜보기: 영상을 넣으면 자동으로 편집해서 output 에 저장하고,
+원본은 claude_success/done 으로 옮김. 폴더 이름은 .env 의 IN_DIR / OUT_DIR 로 바꿀 수 있음.
+옵션은 python -m autocut 과 같음 (예: python watch_inbox.py --blur-faces --in D:\\영상)."""
 import os
 import shutil
 import sys
@@ -7,9 +8,6 @@ import time
 import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-INBOX = os.path.join(HERE, "inbox")
-DONE = os.path.join(INBOX, "done")
-FAILED = os.path.join(INBOX, "failed")
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm"}
 
 
@@ -41,14 +39,21 @@ def main():
     from autocut import run
     from autocut.__main__ import parser, settings_from
 
-    args = parser(with_videos=False).parse_args()  # 영상은 inbox 에서 가져옴
+    p = parser(with_videos=False)  # 영상은 넣는 폴더에서 가져옴
+    p.add_argument("--in", dest="in_dir", default=os.environ.get("IN_DIR") or "claude_success",
+                   help="영상을 넣는 폴더 (기본: claude_success)")
+    args = p.parse_args()
+    inbox = os.path.join(HERE, args.in_dir)  # 절대 경로(D:\...)를 주면 그대로 사용
+    done, failed = os.path.join(inbox, "done"), os.path.join(inbox, "failed")
     out = os.path.join(HERE, args.out)
-    os.makedirs(INBOX, exist_ok=True)
+    os.makedirs(inbox, exist_ok=True)
+    os.makedirs(out, exist_ok=True)
 
-    print(f"inbox 폴더를 지켜보는 중이에요: {INBOX}")
-    print("여기에 영상을 넣으면 자동으로 편집해요. 끝내려면 이 창을 닫으세요.")
+    print(f"영상 넣는 폴더: {inbox}")
+    print(f"결과물 폴더:   {out}")
+    print("영상을 넣으면 자동으로 편집해요. 끝내려면 이 창을 닫으세요.")
     while True:
-        videos = sorted((os.path.join(INBOX, f) for f in os.listdir(INBOX)
+        videos = sorted((os.path.join(inbox, f) for f in os.listdir(inbox)
                          if os.path.splitext(f)[1].lower() in VIDEO_EXT),
                         key=os.path.getmtime)
         for v in videos:
@@ -57,12 +62,12 @@ def main():
             print(f"\n=== {os.path.basename(v)} 편집 시작 ===")
             try:
                 run(v, out, settings_from(args))
-                move(v, DONE)
-                print(f"=== 끝! 결과는 {out} 폴더, 원본은 inbox/done 으로 옮겼어요 ===")
+                move(v, done)
+                print(f"=== 끝! 결과는 {out} 폴더, 원본은 done 폴더로 옮겼어요 ===")
             except Exception:
                 traceback.print_exc()
-                move(v, FAILED)
-                print("=== 실패해서 원본을 inbox/failed 로 옮겼어요 ===")
+                move(v, failed)
+                print("=== 실패해서 원본을 failed 폴더로 옮겼어요 ===")
         time.sleep(3)
 
 

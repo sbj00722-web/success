@@ -19,13 +19,13 @@
 
 | 이름 | 하는 일 |
 |---|---|
-| `inbox/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 끝난 원본은 `inbox/done/`, 실패하면 `inbox/failed/` |
+| `claude_success/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 끝난 원본은 `claude_success/done/`, 실패하면 `claude_success/failed/` (`.env` 의 `IN_DIR` 로 다른 폴더 지정 가능) |
 | `output/` | 결과물. 중간 파일(대본, 편집 계획, 그림, OCR 결과)은 `output/<영상이름>_work/` |
 | `samples/` | 시험용 영상 (`test_video.mp4`) |
 | `autocut/` | 프로그램 본체 |
 | `.env.example` | API 키 적는 양식 → `.env` 로 복사해서 사용 |
 | `run.bat` | 영상을 끌어다 놓으면 편집. 그냥 더블클릭하면 편집기 화면 |
-| `watch.bat` | `inbox/` 지켜보기 시작 |
+| `watch.bat` | `claude_success/` 지켜보기 시작 |
 | `실행.bat` | 편집기 화면 열기 |
 
 ## 처음 한 번 설정: API 키
@@ -54,7 +54,7 @@ VIDEO_CODEC=libx264   # 그래픽카드 인코딩 끄기
 
 ## 실행 방법 3가지
 
-1. **inbox 자동 처리**: `watch.bat` 을 켜 두고 영상을 `inbox/` 에 넣기
+1. **폴더 자동 처리**: `watch.bat` 을 켜 두고 영상을 `claude_success/` 에 넣기 → 결과는 `output/`
 2. **끌어다 놓기**: 영상 파일을 `run.bat` 위에 끌어다 놓기 (여러 개 가능)
 3. **명령줄**:
 
