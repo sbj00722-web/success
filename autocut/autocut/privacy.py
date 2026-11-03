@@ -182,6 +182,42 @@ def pixelate(frame: np.ndarray, x0, y0, x1, y1):
     frame[y0:y1, x0:x1] = cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
 
 
+_FACE_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/"
+             "face_detection_yunet/face_detection_yunet_2023mar.onnx")
+
+
+class FaceBlur:
+    """얼굴 모자이크. 몇 프레임마다 한 번만 찾고 사이 프레임은 같은 자리를 가림."""
+
+    def __init__(self, info, every: int = 3, width: int = 640):
+        import os
+        import urllib.request
+
+        from . import ROOT
+        path = os.path.join(ROOT, "models", os.path.basename(_FACE_URL))
+        if not os.path.exists(path):  # 첫 사용 때 한 번 내려받음 (230KB)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            urllib.request.urlretrieve(_FACE_URL, path)
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)  # 무해한 DNN 경고 숨김
+        self.scale = width / info.width
+        self.size = (width, int(info.height * self.scale))
+        self.det = cv2.FaceDetectorYN.create(path, "", self.size, score_threshold=0.75)
+        self.every, self.n, self.boxes = every, 0, []
+
+    def __call__(self, frame):
+        if self.n % self.every == 0:
+            _, faces = self.det.detect(cv2.resize(frame, self.size, interpolation=cv2.INTER_AREA))
+            self.boxes = []
+            for x, y, w, h in (faces[:, :4] if faces is not None else []):
+                px, py = w * 0.25, h * 0.3  # 머리카락·턱까지 넉넉히
+                self.boxes.append([(x - px) / self.scale, (y - py) / self.scale,
+                                   (x + w + px) / self.scale, (y + h + py) / self.scale])
+        self.n += 1
+        H, W = frame.shape[:2]
+        for x0, y0, x1, y1 in self.boxes:
+            pixelate(frame, max(0, x0), max(0, y0), min(W, x1), min(H, y1))
+
+
 def beep(audio: np.ndarray, sr: int, spans):
     """원본 오디오의 spans 구간을 1kHz 삐- 소리로 바꿈"""
     for s, e in spans:

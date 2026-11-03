@@ -26,13 +26,17 @@ class Settings:
     illustrations: bool = True
     max_illustrations: int = 6
     illustration_mode: str = "full"  # full: 전체 화면 / pip: 오른쪽 위 카드
-    illustration_review: bool = True # 렌더링 결과를 Claude가 한 번 더 보고 고침
+    illustration_review: bool = True # 그린 결과를 Claude가 한 번 더 보고 고침
     font_family: str = "Malgun Gothic"
+    image_engine: str = "auto"       # auto: OPENAI_API_KEY 있으면 openai, 없으면 claude(SVG)
+    image_model: str = "gpt-image-2"
+    image_quality: str = "medium"    # low / medium / high (높을수록 비쌈)
 
     # 개인정보
     pii_screen: bool = True          # 화면 속 글자(OCR) 모자이크
     pii_audio: bool = True           # 말로 나온 개인정보 삐- 처리
     pii_llm_check: bool = True       # 정규식 외에 Claude가 OCR 글자를 한 번 더 검사
+    blur_faces: bool = False         # 얼굴 모자이크 (본인 얼굴도 가려지므로 기본은 끔)
     ocr_fps: float = 1.0             # 초당 몇 프레임을 OCR 할지
     ocr_width: int = 960             # OCR 할 때 줄이는 가로 크기 (클수록 작은 글자도 읽지만 느림)
 

@@ -3,9 +3,10 @@ import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 
 from . import cuts as C
-from . import illustrate, media, planner, privacy, render, transcribe
+from . import illustrate, llm, media, planner, privacy, render, transcribe
 from .config import Settings
 
 
@@ -21,6 +22,10 @@ def _srt_time(t: float) -> str:
 def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     settings = settings or Settings()
     t_start = time.time()
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        log("ANTHROPIC_API_KEY 가 없어서 Claude 단계(NG 컷·설명 그림·말한 개인정보)는 건너뜁니다.")
+        settings = replace(settings, cut_retakes=False, illustrations=False,
+                           pii_audio=False, pii_llm_check=False)
     stem = os.path.splitext(os.path.basename(video))[0]
     work = os.path.join(out_dir, f"{stem}_work")
     os.makedirs(work, exist_ok=True)
@@ -56,10 +61,14 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     plan = {"retake_cuts": [], "illustrations": [], "spoken_pii": [], "summary": ""}
     if segments and (settings.cut_retakes or settings.illustrations or settings.pii_audio):
         log("④ Claude 가 대본을 읽고 편집 계획을 세우는 중...")
-        plan = planner.plan(segments, settings)
-        with open(os.path.join(work, "plan.json"), "w", encoding="utf-8") as f:
-            json.dump(plan, f, ensure_ascii=False, indent=1)
-        log(f"   주제: {plan['summary']}")
+        try:
+            plan = planner.plan(segments, settings)
+            with open(os.path.join(work, "plan.json"), "w", encoding="utf-8") as f:
+                json.dump(plan, f, ensure_ascii=False, indent=1)
+            log(f"   주제: {plan['summary']}")
+        except llm.LLMError as e:
+            log(f"   ⚠ {e} → NG 컷·설명 그림·말한 개인정보는 건너뜁니다.")
+            settings = replace(settings, pii_llm_check=False)
 
     if settings.cut_retakes:
         for item in plan["retake_cuts"]:
@@ -86,7 +95,8 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     # 5. 설명 일러스트
     overlays = []
     if settings.illustrations and plan["illustrations"]:
-        log(f"⑤ 설명 일러스트 {len(plan['illustrations'])}장 그리는 중...")
+        who = "OpenAI" if illustrate.engine(settings) == "openai" else "Claude"
+        log(f"⑤ 설명 일러스트 {len(plan['illustrations'])}장 그리는 중 ({who})...")
         if settings.illustration_mode == "pip":
             cw, ch = 1600, 1200
         else:
@@ -97,8 +107,9 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
             png = os.path.join(work, f"illust_{k + 1:02d}.png")
             try:
                 svg = illustrate.make(item, cw, ch, png, settings, log)
-                with open(png[:-4] + ".svg", "w", encoding="utf-8") as f:
-                    f.write(svg)
+                if svg:
+                    with open(png[:-4] + ".svg", "w", encoding="utf-8") as f:
+                        f.write(svg)
                 log(f"   ✔ {k + 1}. {item['concept']}")
                 return item, png
             except Exception as e:
@@ -126,9 +137,19 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     # 6. 화면 속 개인정보
     boxes = []
     if settings.pii_screen:
-        log("⑥ 화면 속 개인정보 찾는 중 (OCR)...")
-        boxes = privacy.screen_pii(video, info, settings, log)
-        log(f"   모자이크 {len(boxes)}곳")
+        # 같은 영상을 같은 설정으로 다시 돌리면 OCR 결과를 재사용 (가장 오래 걸리는 단계)
+        cache = os.path.join(work, "screen_pii.json")
+        key = [settings.ocr_fps, settings.ocr_width, settings.pii_llm_check]
+        cached = json.load(open(cache, encoding="utf-8")) if os.path.exists(cache) else {}
+        if cached.get("key") == key:
+            boxes = [tuple(b) for b in cached["boxes"]]
+            log(f"⑥ 화면 속 개인정보: 지난번 OCR 결과 재사용, 모자이크 {len(boxes)}곳")
+        else:
+            log("⑥ 화면 속 개인정보 찾는 중 (OCR)...")
+            boxes = privacy.screen_pii(video, info, settings, log)
+            with open(cache, "w", encoding="utf-8") as f:
+                json.dump({"key": key, "boxes": boxes}, f, ensure_ascii=False)
+            log(f"   모자이크 {len(boxes)}곳")
 
     # 7. 오디오 + 렌더링
     log("⑦ 최종 영상 만드는 중...")

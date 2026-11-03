@@ -5,6 +5,14 @@ try:
 except ImportError:
     pass
 
+import os
+
+from dotenv import load_dotenv
+
+# autocut/.env 의 API 키를 환경변수로 (이미 설정된 값은 덮어쓰지 않음)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(ROOT, ".env"))
+
 from .config import Settings
 from .pipeline import run
 

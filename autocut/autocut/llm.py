@@ -25,16 +25,25 @@ def ask(model: str, system: str, content, effort: str = "high", schema: dict = N
         output_config["format"] = {"type": "json_schema", "schema": schema}
     # 긴 대본/SVG 를 다루므로 스트리밍으로 받음 (HTTP 타임아웃 방지).
     # 안전 분류기가 거절하면 서버가 다른 모델로 자동 재시도하도록 fallbacks 사용.
-    with client().beta.messages.stream(
-        model=model,
-        max_tokens=max_tokens,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-        system=system,
-        output_config=output_config,
-        messages=[{"role": "user", "content": content}],
-    ) as stream:
-        msg = stream.get_final_message()
+    try:
+        with client().beta.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            system=system,
+            output_config=output_config,
+            messages=[{"role": "user", "content": content}],
+        ) as stream:
+            msg = stream.get_final_message()
+    except anthropic.APIStatusError as e:
+        if "credit balance" in str(e):
+            raise LLMError("Claude 크레딧이 부족해요 (console.anthropic.com → Plans & Billing 에서 충전)") from e
+        if e.status_code == 401:
+            raise LLMError("Claude API 키가 맞지 않아요 (.env 의 ANTHROPIC_API_KEY 확인)") from e
+        raise LLMError(f"Claude API 오류 {e.status_code}: {e.message}") from e
+    except anthropic.APIConnectionError as e:
+        raise LLMError("Claude 서버에 연결하지 못했어요 (인터넷 연결 확인)") from e
 
     if msg.stop_reason == "refusal":
         raise LLMError("Claude 가 요청을 거절했습니다")

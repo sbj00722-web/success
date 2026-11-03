@@ -1,7 +1,12 @@
 # 비밀 정보 (API 키) - 절대 올리지 않기
 .env
 .env.*
+!.env.example
 api_key.txt
+
+# 자동 처리 폴더, 내려받은 모델
+inbox/
+autocut/models/
 
 # 파이썬 가상환경 / 캐시
 .venv/

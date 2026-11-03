@@ -1,46 +1,58 @@
 # 유튜브 자동 1차 편집기 (autocut)
 
-영상을 올리면 다음을 자동으로 합니다.
+영상을 넣으면 다음을 자동으로 합니다.
 
 1. **컷 편집 1차**
    - 무음 구간 자르기 (말 앞뒤로 0.15초 여유를 남겨 자연스럽게)
    - 필러워드("어", "음" 등) 자르기
    - NG 구간 자르기: Claude가 대본을 읽고 다시 말한 문장, 말 더듬기, 촬영 중 혼잣말만 골라냄 (이해에 필요한 내용은 남김)
-2. **설명 일러스트 넣기**: 말만으로 이해하기 어려운 부분에 '플랫 벡터 + 핸드드로잉 카툰' 스타일 그림을 글자 최소로 그려서, 그 말이 나오는 동안 화면에 보여 줌
+2. **설명 그림 넣기**: 말만으로 이해하기 어려운 부분에 '플랫 벡터 + 핸드드로잉 카툰' 스타일 그림을 글자 최소로 넣음
+   - OpenAI 키가 있으면 OpenAI 이미지 모델(`gpt-image-2`)이 그리고, 한글 라벨은 프로그램이 직접 씀
+   - 없으면 Claude가 SVG로 직접 그림
 3. **개인정보 처리**
    - 화면 속 글자(OCR): 전화번호·주민번호·계좌·카드·이메일·주소·차량번호 등을 모자이크
    - 말로 나온 개인정보: 삐- 소리로 가림
-4. 결과물: `편집본.mp4`, 편집본 기준 자막 `.srt`, 무엇을 왜 잘랐는지 적은 `편집리포트.md`, 일러스트 PNG/SVG
+   - 얼굴 모자이크(선택): `--blur-faces`
+4. 결과물: `편집본.mp4`, 편집본 기준 자막 `.srt`, 무엇을 왜 잘랐는지 적은 `편집리포트.md`, 설명 그림 PNG
 
-## 처음 한 번 설정
+## 폴더 구성
 
-PowerShell에서:
+| 이름 | 하는 일 |
+|---|---|
+| `inbox/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 끝난 원본은 `inbox/done/`, 실패하면 `inbox/failed/` |
+| `output/` | 결과물. 중간 파일(대본, 편집 계획, 그림, OCR 결과)은 `output/<영상이름>_work/` |
+| `samples/` | 시험용 영상 (`test_video.mp4`) |
+| `autocut/` | 프로그램 본체 |
+| `.env.example` | API 키 적는 양식 → `.env` 로 복사해서 사용 |
+| `run.bat` | 영상을 끌어다 놓으면 편집. 그냥 더블클릭하면 편집기 화면 |
+| `watch.bat` | `inbox/` 지켜보기 시작 |
+| `실행.bat` | 편집기 화면 열기 |
+
+## 처음 한 번 설정: API 키
+
+`.env.example` 을 복사해서 이름을 `.env` 로 바꾸고, 키를 붙여넣으세요.
+
+| 키 | 없으면 |
+|---|---|
+| `ANTHROPIC_API_KEY` | NG 컷 · 설명 그림 · 말한 개인정보 단계를 건너뜀 (나머지는 정상) |
+| `OPENAI_API_KEY` | 설명 그림을 Claude가 SVG로 그림 |
+
+키가 있어도 **크레딧(충전 금액)이 0원이면** 해당 단계는 건너뛰고 나머지는 계속 진행합니다.
+
+## 실행 방법 3가지
+
+1. **inbox 자동 처리**: `watch.bat` 을 켜 두고 영상을 `inbox/` 에 넣기
+2. **끌어다 놓기**: 영상 파일을 `run.bat` 위에 끌어다 놓기 (여러 개 가능)
+3. **명령줄**:
 
 ```powershell
 cd D:\success\autocut
-.\.venv\Scripts\Activate.ps1
-$env:ANTHROPIC_API_KEY = "sk-ant-..."   # https://console.anthropic.com 에서 발급
+.\.venv\Scripts\python.exe -m autocut samples\test_video.mp4
+.\.venv\Scripts\python.exe -m autocut 촬영본.mp4 --illustration-mode pip --max-illustrations 4
+.\.venv\Scripts\python.exe -m autocut 촬영본.mp4 --silence-db -45 --no-review --blur-faces
 ```
 
-키를 계속 쓰려면 Windows 환경 변수에 `ANTHROPIC_API_KEY` 를 등록하세요.
-
-## 실행
-
-웹 화면 (영상 끌어다 놓기):
-
-```powershell
-python app.py
-```
-
-명령줄:
-
-```powershell
-python cli.py "D:\영상\촬영본.mp4" -o output
-python cli.py 촬영본.mp4 --illustration-mode pip --max-illustrations 4
-python cli.py 촬영본.mp4 --silence-db -45 --no-review
-```
-
-결과는 `output\` 폴더에 생깁니다. 중간 파일(대본, 편집 계획, 일러스트)은 `output\<영상이름>_work\` 에 있고, 같은 영상을 다시 돌리면 음성 인식 결과를 재사용합니다.
+같은 영상을 다시 돌리면 음성 인식과 OCR 결과를 재사용해서 빠르게 끝납니다.
 
 ## 조절 팁
 
@@ -48,12 +60,14 @@ python cli.py 촬영본.mp4 --silence-db -45 --no-review
 |---|---|
 | 말소리 끝이 잘림 | 무음 기준을 더 낮게 (`--silence-db -45`) |
 | 무음이 덜 잘림 | 무음 기준을 높게 (`-33`) 또는 `--min-silence 0.4` |
-| 일러스트가 말과 안 맞음 | `<영상>_work\plan.json` 확인 후 리포트를 보고 판단 |
+| 그림이 말과 안 맞음 | `<영상>_work\plan.json` 확인 후 리포트를 보고 판단 |
 | 비용을 줄이고 싶음 | `--no-review`, `--max-illustrations 3` |
+| Claude 그림을 쓰고 싶음 | `--image-engine claude` |
 
 ## 비용과 한계
 
-- Claude API(claude-opus-5-5): 10분 영상 기준 편집 계획 1회 + 일러스트 장당 1~2회 호출.
+- Claude(claude-opus-5-5): 10분 영상 기준 편집 계획 1회 + 그림 검토 장당 1회.
+- OpenAI(gpt-image-2, 보통 품질): 그림 장당 1장 (검토에서 문제가 있으면 1장 더).
 - Whisper는 "어/음"을 대본에서 빼먹는 경우가 있어 필러가 일부 남을 수 있습니다. 무음 컷이 상당 부분 보완합니다.
-- 얼굴은 모자이크하지 않습니다 (유튜버 본인 얼굴까지 가려지므로). 화면 속 글자와 음성만 처리합니다.
+- 얼굴은 기본으로 가리지 않습니다 (본인 얼굴도 가려지므로). 필요하면 `--blur-faces`.
 - 자동 편집이므로 **업로드 전 편집리포트를 보고 모자이크·컷 위치를 꼭 확인**하세요.

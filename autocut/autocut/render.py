@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from . import media
-from .privacy import pixelate
+from .privacy import FaceBlur, pixelate
 
 FADE = 0.3  # 일러스트 페이드 인/아웃(초)
 
@@ -46,6 +46,7 @@ def render(video, info, timeline, boxes, overlays, audio_wav, out_path, settings
     for ov in overlays:
         ov["img"] = _load_overlay(ov["png"], info, settings.illustration_mode)
     margin = int(info.width * 0.03)
+    faces = FaceBlur(info) if settings.blur_faces else None
 
     box_starts = [b[0] for b in boxes]
     total = int(timeline.duration * info.fps)
@@ -62,6 +63,8 @@ def render(video, info, timeline, boxes, overlays, audio_wav, out_path, settings
             for b in boxes[: bisect.bisect_right(box_starts, t)]:
                 if b[0] <= t <= b[1]:
                     pixelate(frame, *b[2:6])
+            if faces:
+                faces(frame)
 
             # 설명 일러스트 (편집본 시간 기준)
             nt = written / info.fps

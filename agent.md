@@ -23,8 +23,9 @@
 - 시간 계산은 원본 기준, 화면 합성 때만 편집본 시간으로 변환
 - `.bat` 파일에는 한글을 쓰지 않음
 - 새 라이브러리를 추가하면 `autocut/requirements.txt` 에도 적기
+- API 키는 `autocut/.env` 에서 읽음 (`autocut/__init__.py` 의 `load_dotenv`). 양식은 `.env.example`
 
 ## 금지 사항
-- `api_key.txt`, `.env` 등 비밀 정보 커밋 금지
+- `.env` 등 비밀 정보 커밋 금지 (`.env.example` 은 빈 양식이라 커밋함)
 - 영상·오디오 파일, `output/`, `.venv/` 커밋 금지
 - 사용자 확인 없이 파일 대량 삭제, 강제 푸시(`git push --force`) 금지

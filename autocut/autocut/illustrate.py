@@ -1,5 +1,8 @@
-"""Claude 가 그린 SVG 로 '플랫 벡터 + 핸드드로잉 카툰' 설명 그림 만들기."""
+"""'플랫 벡터 + 핸드드로잉 카툰' 설명 그림 만들기.
+OPENAI_API_KEY 가 있으면 OpenAI 이미지 모델로, 없으면 Claude 가 SVG 로 직접 그림."""
 import base64
+import io
+import os
 import re
 
 from . import llm
@@ -87,8 +90,108 @@ def render_png(svg: str, out_path: str, font_dirs=None):
         f.write(data)
 
 
-def make(item: dict, w: int, h: int, out_png: str, settings, log) -> str:
-    """item: planner 의 illustrations 항목. 최종 SVG 문자열을 돌려줌."""
+def engine(settings) -> str:
+    if settings.image_engine == "auto":
+        return "openai" if os.environ.get("OPENAI_API_KEY") else "claude"
+    return settings.image_engine
+
+
+def make(item: dict, w: int, h: int, out_png: str, settings, log):
+    """item: planner 의 illustrations 항목. SVG 로 그렸으면 SVG 문자열, 아니면 None 을 돌려줌."""
+    if engine(settings) == "openai":
+        import openai
+        try:
+            make_image(item, w, h, out_png, settings, log)
+            return None
+        except openai.APIError as e:
+            why = ("OpenAI 크레딧이 부족해요" if "credits" in str(e) or "quota" in str(e)
+                   else f"OpenAI 오류: {getattr(e, 'message', e)}")
+            log(f"    {why} → Claude 가 대신 그립니다")
+    return make_svg(item, w, h, out_png, settings, log)
+
+
+# ---------- OpenAI 이미지 ----------
+
+IMAGE_STYLE = """Explainer illustration for a Korean YouTube video.
+Style: flat vector illustration mixed with a hand-drawn cartoon look. Warm cream paper background (#FFF7E8)
+with a subtle paper texture. Thick charcoal marker outlines, slightly wobbly and organic.
+Limited flat palette: coral, sunny yellow, mint, sky blue, lavender. Simple cute characters with round heads
+and dot eyes, chunky hand-drawn arrows, a few small doodle accents (sparkles, motion lines).
+No gradients, no photorealism, no 3D. Few large elements, generous empty space, bold and readable from far away.
+Absolutely no text, letters, numbers or logos anywhere in the image."""
+
+IMAGE_REVIEW = """You review an AI-generated explainer illustration (attached) for a Korean YouTube video.
+Reject it (ok=false) only for real problems: visible text/letters/gibberish writing, the scene not matching the intent,
+broken or creepy anatomy, clutter that hides the idea, or a style far from flat vector + hand-drawn cartoon.
+In problems, write a short English instruction for the redraw."""
+
+IMAGE_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {"ok": {"type": "boolean"}, "problems": {"type": "string"}},
+    "required": ["ok", "problems"],
+    "additionalProperties": False,
+}
+
+_FONT = r"C:\Windows\Fonts\malgunbd.ttf"
+
+
+def _openai_png(prompt: str, size: str, settings) -> bytes:
+    from openai import OpenAI
+    r = OpenAI().images.generate(model=settings.image_model, prompt=prompt, size=size,
+                                 quality=settings.image_quality, n=1)
+    return base64.b64decode(r.data[0].b64_json)
+
+
+def _compose(png: bytes, w: int, h: int, label: str):
+    """생성된 그림을 캔버스 크기에 맞추고(남는 곳은 종이색), 한글 라벨은 직접 씀
+    (이미지 모델은 한글을 자주 틀리게 그림)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    art = Image.open(io.BytesIO(png)).convert("RGB")
+    canvas = Image.new("RGB", (w, h), "#FFF7E8")
+    label_h = int(h * 0.17) if label else 0
+    scale = min(w / art.width, (h - label_h) / art.height)
+    art = art.resize((int(art.width * scale), int(art.height * scale)), Image.LANCZOS)
+    canvas.paste(art, ((w - art.width) // 2, (h - label_h - art.height) // 2))
+    if label:
+        draw = ImageDraw.Draw(canvas)
+        size = int(label_h * 0.62)
+        font = ImageFont.truetype(_FONT if os.path.exists(_FONT) else "arial.ttf", size)
+        while draw.textlength(label, font=font) > w * 0.9 and size > 20:
+            size -= 4
+            font = ImageFont.truetype(font.path, size)
+        draw.text((w / 2, h - label_h / 2), label, font=font, fill="#2B2B2B", anchor="mm",
+                  stroke_width=max(2, size // 14), stroke_fill="#FFF7E8")
+    return canvas
+
+
+def make_image(item: dict, w: int, h: int, out_png: str, settings, log):
+    size = "1536x1024" if w > h * 1.15 else "1024x1536" if h > w * 1.15 else "1024x1024"
+    prompt = (f"{IMAGE_STYLE}\n\nConcept being explained (Korean): {item['concept']}\n"
+              f"Scene: {item['scene']}")
+    png = _openai_png(prompt, size, settings)
+
+    if settings.illustration_review and os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            res = llm.ask_json(settings.model, IMAGE_REVIEW, [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                             "data": base64.standard_b64encode(png).decode()}},
+                {"type": "text", "text": f"Intent:\nConcept: {item['concept']}\nScene: {item['scene']}"},
+            ], IMAGE_REVIEW_SCHEMA, effort="medium")
+        except llm.LLMError as e:
+            log(f"    검토 건너뜀: {e}")
+            res = {"ok": True}
+        if not res["ok"]:
+            log(f"    검토 후 다시 그림: {res['problems']}")
+            png = _openai_png(prompt + f"\n\nImportant fix from review: {res['problems']}", size, settings)
+
+    _compose(png, w, h, item.get("label", "")).save(out_png)
+
+
+# ---------- Claude SVG ----------
+
+def make_svg(item: dict, w: int, h: int, out_png: str, settings, log) -> str:
+    """최종 SVG 문자열을 돌려줌."""
     system = STYLE.replace("{font}", settings.font_family).replace("{w}", str(w)).replace("{h}", str(h))
     prompt = (f"Canvas: {w}x{h}.\nConcept being explained (Korean): {item['concept']}\n"
               f"Scene: {item['scene']}\n"

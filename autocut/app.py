@@ -11,15 +11,19 @@ from autocut import Settings, run
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
 
+ENGINES = {"자동 (OpenAI 키가 있으면 OpenAI)": "auto", "OpenAI 그림": "openai", "Claude 그림 (SVG)": "claude"}
+
+
 def process(video, silence_db, min_silence, cut_fillers, cut_retakes, illustrations, max_ill,
-            mode, review, pii, ocr_every, whisper_model):
+            mode, engine, review, pii, faces, ocr_every, whisper_model):
     if not video:
         yield "영상을 먼저 올려 주세요.", None, None
         return
     s = Settings(whisper_model=whisper_model, silence_db=silence_db, min_silence=min_silence,
                  cut_fillers=cut_fillers, cut_retakes=cut_retakes, illustrations=illustrations,
                  max_illustrations=int(max_ill), illustration_mode="pip" if mode.startswith("작은") else "full",
-                 illustration_review=review, pii_screen=pii, pii_audio=pii, ocr_fps=1.0 / ocr_every)
+                 image_engine=ENGINES[engine], illustration_review=review, pii_screen=pii, pii_audio=pii,
+                 blur_faces=faces, ocr_fps=1.0 / ocr_every)
     os.makedirs(OUT_DIR, exist_ok=True)
 
     q, box, logs = queue.Queue(), {}, []
@@ -56,9 +60,11 @@ with gr.Blocks(title="자동 1차 편집기") as demo:
                 illustrations = gr.Checkbox(True, label="일러스트 넣기")
                 max_ill = gr.Slider(1, 12, value=6, step=1, label="최대 장수")
                 mode = gr.Radio(["전체 화면", "작은 카드(오른쪽 위)"], value="전체 화면", label="보여주는 방식")
+                engine = gr.Radio(list(ENGINES), value=next(iter(ENGINES)), label="그림 그리는 AI")
                 review = gr.Checkbox(True, label="그린 뒤 AI가 한 번 더 검토 (품질↑ 비용↑)")
             with gr.Accordion("기타", open=False):
                 pii = gr.Checkbox(True, label="개인정보 모자이크 / 삐- 처리")
+                faces = gr.Checkbox(False, label="얼굴 모자이크 (본인 얼굴도 가려져요)")
                 ocr_every = gr.Slider(0.5, 3, value=1, step=0.5, label="화면 글자 검사 간격 (초, 클수록 빠르지만 잠깐 나온 글자를 놓칠 수 있음)")
                 whisper_model = gr.Dropdown(["large-v3", "medium", "small"], value="large-v3", label="음성 인식 모델")
             btn = gr.Button("편집 시작", variant="primary")
@@ -68,7 +74,8 @@ with gr.Blocks(title="자동 1차 편집기") as demo:
             log = gr.Textbox(label="진행 상황", lines=18, max_lines=18, autoscroll=True)
 
     btn.click(process, [video, silence_db, min_silence, cut_fillers, cut_retakes, illustrations,
-                        max_ill, mode, review, pii, ocr_every, whisper_model], [log, out_video, files])
+                        max_ill, mode, engine, review, pii, faces, ocr_every, whisper_model],
+                [log, out_video, files])
 
 if __name__ == "__main__":
     demo.queue().launch(inbrowser=True)

@@ -1,6 +1,8 @@
 # GPU(NVIDIA)용 torch 는 먼저 따로 설치:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu126
 anthropic>=0.75
+openai>=2
+python-dotenv>=1
 pydantic>=2
 faster-whisper>=1.1
 easyocr>=1.7
