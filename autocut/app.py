@@ -48,7 +48,7 @@ def process(video, silence_db, min_silence, cut_fillers, cut_retakes, illustrati
 
     r = box.get("result")
     if r:
-        yield "\n".join(logs[-300:]), r["video"], [r["video"], r["srt"], r["report"], *r["illustrations"]]
+        yield "\n".join(logs[-300:]), r["video"], [p for p in (r["video"], r["srt"], r.get("srt_original"), r["report"], *r["illustrations"]) if p]
 
 
 with gr.Blocks(title="자동 1차 편집기") as demo:

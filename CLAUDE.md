@@ -19,7 +19,7 @@
 - API 키: `autocut/.env` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), 양식은 `autocut/.env.example`. 키가 없거나 크레딧이 없으면 해당 단계만 건너뜀
 - 설정: `Settings` 의 모든 필드를 `.env` 에서 대문자 이름으로 바꿀 수 있음 (`Settings.from_env()`). 우선순위는 기본값 < `.env` < 화면/명령줄. 필드를 추가하면 `.env.example` 에도 적기
 - 사용자용 실행: `autocut/실행.bat` 더블클릭 → `launch.py` 가 API 키 확인 후 Gradio 화면(`app.py`) 실행
-- 끌어다 놓기: `autocut/run.bat`, 자동 처리: `autocut/watch.bat` → `watch_inbox.py` 가 `inbox/` 감시, 원본은 `inbox/done/`
+- 끌어다 놓기: `autocut/run.bat`, 자동 처리: `autocut/watch.bat` → `watch_inbox.py` 가 구글 드라이브 `내 드라이브/claude_success/` 감시(자동 탐색, `.env` 의 `GDRIVE_DIR`/`IN_DIR`/`OUT_DIR`), 편집은 로컬 `output/` 에서 하고 결과물만 `claude_success/output/` 으로 복사, 원본은 `claude_success/done/`
 - 명령줄: `cd autocut` 후 `.venv/Scripts/python.exe -m autocut samples/test_video.mp4` (`cli.py` 도 같음)
 - 의존성 설치: `autocut/requirements.txt` (torch 는 cu126 인덱스로 먼저 설치)
 - Claude 단계가 없는 부분만 시험하려면 `Settings(cut_retakes=False, illustrations=False, pii_audio=False, pii_llm_check=False)`
@@ -30,14 +30,15 @@
 |---|---|
 | `config.py` | 모든 설정값(`Settings`) |
 | `media.py` | ffmpeg 호출 (imageio-ffmpeg 내장 바이너리, ffprobe 없이 `ffmpeg -i` 파싱) |
-| `transcribe.py` | faster-whisper, 결과를 `transcript.json` 에 캐시 |
+| `transcribe.py` | faster-whisper, `language=auto` 면 말소리 덩어리(VAD)마다 언어 감지. 결과를 `transcript.json` 에 캐시 |
 | `cuts.py` | 무음/필러 컷, 문장 위치 찾기, 원본↔편집본 시간 변환(`Timeline`) |
 | `llm.py` | Claude API 공통 호출 (스트리밍 + 구조화 출력 + 서버 측 fallback) |
 | `planner.py` | 대본 → NG 컷 / 일러스트 위치 / 말한 개인정보 계획 |
 | `illustrate.py` | OpenAI 이미지(한글 라벨은 PIL 로 직접) 또는 Claude SVG → resvg PNG, 결과를 Claude 가 재검토 |
 | `privacy.py` | EasyOCR + 정규식(+Claude) 개인정보 탐지, 모자이크, 삐- 소리, 얼굴 모자이크(YuNet, `models/` 에 자동 다운로드) |
 | `__main__.py` | 명령줄 옵션 (`python -m autocut`, `watch_inbox.py` 도 같은 옵션 사용) |
-| `render.py` | 프레임 단위 합성(컷·모자이크·일러스트) 후 libx264 인코딩 |
+| `subtitles.py` | 자막 줄 나누기, AI 다듬기·번역(Claude → OpenAI → PC 번역 NLLB), srt, 영상에 직접 넣기(`Burner`) |
+| `render.py` | 프레임 단위 합성(컷·모자이크·일러스트·자막) 후 인코딩 |
 | `pipeline.py` | 전체 순서 조립, srt·리포트 작성 |
 
 ## 규칙

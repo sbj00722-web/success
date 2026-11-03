@@ -4,7 +4,8 @@ import os
 from dataclasses import dataclass, field, fields, asdict, replace
 
 
-DEFAULT_FILLERS = ["어", "어어", "음", "음음", "으음", "으", "엄", "흠", "에", "에에", "어음", "음어"]
+DEFAULT_FILLERS = ["어", "어어", "음", "음음", "으음", "으", "엄", "흠", "에", "에에", "어음", "음어",
+                   "um", "umm", "uh", "uhh", "uhm", "erm"]
 
 
 @dataclass
@@ -12,7 +13,19 @@ class Settings:
     # 음성 인식 (faster-whisper)
     whisper_model: str = "large-v3"
     whisper_device: str = "auto"     # auto | cuda | cpu
-    language: str = "ko"
+    language: str = "auto"           # auto: 말소리 덩어리마다 언어를 알아냄 (한국어+영어 섞인 영상) / ko, en 등으로 고정
+    languages: list = field(default_factory=lambda: ["ko", "en"])  # auto 일 때 고를 언어 (비우면 전부)
+
+    # 자막
+    burn_subtitles: bool = True      # 영상에 자막을 직접 넣음 (끄면 srt 파일만)
+    subtitle_polish: bool = True     # AI(Claude → OpenAI)로 오타 고치기 + 외국어 한국어 번역
+    local_translate: bool = True     # AI 를 못 쓸 때 PC 안의 번역 모델로 외국어 → 한국어 (처음 한 번 약 5GB 다운로드)
+    local_translate_model: str = "facebook/nllb-200-distilled-1.3B"
+    subtitle_show_original: bool = True  # 외국어 자막에 원래 말도 작게 같이 표시
+    subtitle_max_chars: int = 28     # 한국어 자막 한 덩어리 최대 글자 수 (외국어는 2배)
+    subtitle_size: float = 0.05      # 글자 크기 (영상 짧은 변 대비 비율)
+    subtitle_bottom: float = 0.07    # 화면 아래에서 띄우는 거리 (비율)
+    subtitle_font: str = "malgunbd.ttf"
 
     # 1차 컷: 무음
     cut_silence: bool = True
@@ -46,6 +59,7 @@ class Settings:
     # Claude
     claude_model: str = "claude-opus-5-5"
     claude_effort: str = "high"      # low / medium / high
+    openai_text_model: str = "gpt-5.5"  # Claude 를 못 쓸 때 자막 다듬기·번역에 쓸 OpenAI 모델
 
     # 출력 인코딩
     video_codec: str = "auto"        # auto(NVIDIA 그래픽카드면 h264_nvenc) | h264_nvenc | libx264

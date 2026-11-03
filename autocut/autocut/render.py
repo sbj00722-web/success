@@ -38,10 +38,11 @@ def _load_overlay(png: str, info, mode: str):
     return cv2.resize(img, (info.width, info.height), interpolation=cv2.INTER_AREA)
 
 
-def render(video, info, timeline, boxes, overlays, audio_wav, out_path, settings, log):
+def render(video, info, timeline, boxes, overlays, audio_wav, out_path, settings, log, subtitles=None):
     """
     boxes: 원본 시간 기준 [(t0, t1, x0, y0, x1, y1, kind)]
     overlays: 편집본 시간 기준 [{"start", "end", "png"}]
+    subtitles: subtitles.Burner (편집본 시간 기준, 일러스트 위에 그림)
     """
     for ov in overlays:
         ov["img"] = _load_overlay(ov["png"], info, settings.illustration_mode)
@@ -81,6 +82,9 @@ def render(video, info, timeline, boxes, overlays, audio_wav, out_path, settings
                         frame[y0:y0 + h, x0:x0 + w] = cv2.addWeighted(img, a, dst, 1 - a, 0)
                     else:
                         frame = cv2.addWeighted(img, a, frame, 1 - a, 0)
+
+            if subtitles:
+                subtitles(frame, nt)
 
             enc.stdin.write(frame.tobytes())
             written += 1

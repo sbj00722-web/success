@@ -13,19 +13,24 @@
    - 화면 속 글자(OCR): 전화번호·주민번호·계좌·카드·이메일·주소·차량번호 등을 모자이크
    - 말로 나온 개인정보: 삐- 소리로 가림
    - 얼굴 모자이크(선택): `--blur-faces`
-4. 결과물: `편집본.mp4`, 편집본 기준 자막 `.srt`, 무엇을 왜 잘랐는지 적은 `편집리포트.md`, 설명 그림 PNG
+4. **자막**
+   - 말소리 덩어리마다 언어를 알아냄 → 한국어와 영어가 섞인 인터뷰도 각자 원래 말 그대로 받아 적음
+   - 문장·쉼표·쉬는 자리에서 읽기 좋게 나누고, 너무 짧게 깜빡이지 않게 시간 조정
+   - AI(Claude → 안 되면 OpenAI)가 오타·띄어쓰기를 고치고 외국어는 한국어로 번역. 둘 다 못 쓰면 PC 안의 번역 모델(NLLB)이 번역
+   - 영상에 직접 넣음: 한국어는 크게, 외국어 원문은 그 위에 작게 (`--no-burn-subtitles` 로 끄기)
+5. 결과물: `편집본.mp4`, 한국어 자막 `편집본.srt`, 외국어가 있으면 원어 자막 `원어자막.srt`, 무엇을 왜 잘랐는지 적은 `편집리포트.md`, 설명 그림 PNG
 
 ## 폴더 구성
 
 | 이름 | 하는 일 |
 |---|---|
-| `inbox/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 끝난 원본은 `inbox/done/`, 실패하면 `inbox/failed/` |
-| `output/` | 결과물. 중간 파일(대본, 편집 계획, 그림, OCR 결과)은 `output/<영상이름>_work/` |
+| 구글 드라이브 `내 드라이브/claude_success/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 결과물은 `claude_success/output/`, 끝난 원본은 `claude_success/done/`, 실패하면 `claude_success/failed/` |
+| `output/` | PC 안 작업 폴더이자 `run.bat`·명령줄 결과물. 중간 파일(대본, 편집 계획, 그림, OCR 결과)은 `output/<영상이름>_work/` |
 | `samples/` | 시험용 영상 (`test_video.mp4`) |
 | `autocut/` | 프로그램 본체 |
 | `.env.example` | API 키 적는 양식 → `.env` 로 복사해서 사용 |
 | `run.bat` | 영상을 끌어다 놓으면 편집. 그냥 더블클릭하면 편집기 화면 |
-| `watch.bat` | `inbox/` 지켜보기 시작 |
+| `watch.bat` | 구글 드라이브 `claude_success/` 지켜보기 시작 |
 | `실행.bat` | 편집기 화면 열기 |
 
 ## 처음 한 번 설정: API 키
@@ -36,6 +41,7 @@
 |---|---|
 | `ANTHROPIC_API_KEY` | NG 컷 · 설명 그림 · 말한 개인정보 단계를 건너뜀 (나머지는 정상) |
 | `OPENAI_API_KEY` | 설명 그림을 Claude가 SVG로 그림 |
+| 둘 다 없음 | 자막 번역은 PC 안의 번역 모델이 대신함 (처음 한 번 약 5GB 다운로드, 품질은 AI 보다 낮음) |
 
 키가 있어도 **크레딧(충전 금액)이 0원이면** 해당 단계는 건너뛰고 나머지는 계속 진행합니다.
 
@@ -54,7 +60,9 @@ VIDEO_CODEC=libx264   # 그래픽카드 인코딩 끄기
 
 ## 실행 방법 3가지
 
-1. **inbox 자동 처리**: `watch.bat` 을 켜 두고 영상을 `inbox/` 에 넣기
+1. **구글 드라이브 자동 처리**: `watch.bat` 을 켜 두고 영상을 구글 드라이브 `내 드라이브/claude_success/` 에 넣기 → 결과는 `claude_success/output/`
+   - PC 에 [구글 드라이브 앱(Google Drive for desktop)](https://www.google.com/drive/download/)이 설치·로그인돼 있어야 합니다 (보통 `G:\내 드라이브`). 휴대폰이나 다른 PC 에서 올려도 됩니다.
+   - 편집은 PC 안에서 하고 다 만든 결과물만 드라이브에 올립니다. 드라이브를 못 찾으면 `.env` 에 `GDRIVE_DIR=G:\내 드라이브` 처럼 적어 주세요.
 2. **끌어다 놓기**: 영상 파일을 `run.bat` 위에 끌어다 놓기 (여러 개 가능)
 3. **명령줄**:
 
@@ -75,6 +83,8 @@ cd D:\success\autocut
 | 무음이 덜 잘림 | 무음 기준을 높게 (`-33`) 또는 `--min-silence 0.4` |
 | 그림이 말과 안 맞음 | `<영상>_work\plan.json` 확인 후 리포트를 보고 판단 |
 | 비용을 줄이고 싶음 | `--no-review`, `--max-illustrations 3` |
+| 자막 언어가 틀림 | `.env` 에 `LANGUAGE=ko` 처럼 고정하거나, 다른 언어가 나오면 `LANGUAGES=ko,en,ja` |
+| 자막이 너무 크거나 작음 | `.env` 의 `SUBTITLE_SIZE` (기본 0.05) |
 | Claude 그림을 쓰고 싶음 | `--image-engine claude` |
 
 ## 비용과 한계

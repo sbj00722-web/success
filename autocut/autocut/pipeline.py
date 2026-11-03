@@ -6,17 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
 from . import cuts as C
-from . import illustrate, llm, media, planner, privacy, render, transcribe
+from . import illustrate, llm, media, planner, privacy, render, subtitles, transcribe
 from .config import Settings
 
 
 def _fmt(t: float) -> str:
     return f"{int(t // 60):02d}:{t % 60:05.2f}"
-
-
-def _srt_time(t: float) -> str:
-    ms = int(round(t * 1000))
-    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
 
 
 def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
@@ -43,7 +38,7 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     log("② 음성 인식 중...")
     segments = transcribe.transcribe(a16, os.path.join(work, "transcript.json"),
                                      settings.whisper_model, settings.language, log,
-                                     settings.whisper_device)
+                                     settings.whisper_device, settings.languages)
     seg_by_id = {s["id"]: s for s in segments}
 
     # 3. 1차 컷: 무음 + 필러
@@ -153,54 +148,55 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
                 json.dump({"key": key, "boxes": boxes}, f, ensure_ascii=False)
             log(f"   모자이크 {len(boxes)}곳")
 
-    # 7. 오디오 + 렌더링
-    log("⑦ 최종 영상 만드는 중...")
+    # 7. 자막 (편집본 시간 기준)
+    log("⑦ 자막 만드는 중...")
+    cues = subtitles.build_cues(segments, tl, pii_spans, settings)
+    sub_engine = subtitles.polish(cues, work, settings, log)
+    foreign = sum(c["lang"] != "ko" for c in cues)
+    log(f"   자막 {len(cues)}줄 (외국어 {foreign}줄), 다듬기: {sub_engine}"
+        + (", 영상에 직접 넣음" if settings.burn_subtitles else ""))
+    srt_path = os.path.join(out_dir, f"{stem}_편집본.srt")
+    subtitles.write_srt(srt_path, cues, "ko")
+    srt_orig = None
+    if foreign:
+        srt_orig = os.path.join(out_dir, f"{stem}_원어자막.srt")
+        subtitles.write_srt(srt_orig, cues, "text")
+
+    # 8. 오디오 + 렌더링
+    log("⑧ 최종 영상 만드는 중...")
     audio48, sr48 = media.read_wav(a48)
     if pii_spans:
         audio48 = privacy.beep(audio48, sr48, pii_spans)
     cut_wav = os.path.join(work, "audio_edited.wav")
     media.write_wav(cut_wav, render.cut_audio(audio48, sr48, keeps), sr48)
     out_video = os.path.join(out_dir, f"{stem}_편집본.mp4")
-    render.render(video, info, tl, boxes, overlays, cut_wav, out_video, settings, log)
+    burner = subtitles.Burner(cues, info, settings) if settings.burn_subtitles and cues else None
+    render.render(video, info, tl, boxes, overlays, cut_wav, out_video, settings, log, burner)
 
-    # 8. 자막(.srt)과 편집 리포트
-    srt_path = os.path.join(out_dir, f"{stem}_편집본.srt")
-    _write_srt(srt_path, segments, tl, pii_spans)
+    # 9. 편집 리포트
     report_path = os.path.join(out_dir, f"{stem}_편집리포트.md")
-    _write_report(report_path, video, info, tl, all_cuts, overlays, boxes, pii_spans, plan)
+    sub_info = {"count": len(cues), "foreign": foreign, "engine": sub_engine,
+                "burned": burner is not None,
+                "langs": sorted({c["lang"] for c in cues})}
+    _write_report(report_path, video, info, tl, all_cuts, overlays, boxes, pii_spans, plan, sub_info)
 
     log(f"완료! ({time.time() - t_start:.0f}초) → {out_video}")
-    return {"video": out_video, "srt": srt_path, "report": report_path,
+    return {"video": out_video, "srt": srt_path, "srt_original": srt_orig, "report": report_path,
             "illustrations": [o["png"] for o in overlays]}
 
 
-def _write_srt(path, segments, tl, pii_spans):
-    def is_pii(w):
-        mid = (w["start"] + w["end"]) / 2
-        return any(s <= mid <= e for s, e in pii_spans)
-
-    n, lines = 0, []
-    for seg in segments:
-        words = [w for w in seg["words"] if tl.is_kept((w["start"] + w["end"]) / 2)]
-        if not words:
-            continue
-        text = " ".join("***" if is_pii(w) else w["word"] for w in words)
-        s, e = tl.to_new(words[0]["start"]), tl.to_new(words[-1]["end"])
-        if e - s < 0.2:
-            continue
-        n += 1
-        lines += [str(n), f"{_srt_time(s)} --> {_srt_time(e)}", text, ""]
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-
-
-def _write_report(path, video, info, tl, all_cuts, overlays, boxes, pii_spans, plan):
+def _write_report(path, video, info, tl, all_cuts, overlays, boxes, pii_spans, plan, sub_info):
     L = [f"# 편집 리포트: {os.path.basename(video)}", "",
          f"- 원본 {_fmt(info.duration)} → 편집본 {_fmt(tl.duration)}",
          f"- 주제: {plan.get('summary', '')}", "",
          "## 잘라낸 구간 (원본 기준)", "", "| 시작 | 끝 | 길이 | 이유 |", "|---|---|---|---|"]
     for s, e, why in sorted(all_cuts):
         L.append(f"| {_fmt(s)} | {_fmt(e)} | {e - s:.2f}s | {why} |")
+    L += ["", "## 자막", "",
+          f"- {sub_info['count']}줄, 언어: {', '.join(sub_info['langs']) or '-'}"
+          + (f" (외국어 {sub_info['foreign']}줄은 한국어로 번역)" if sub_info["foreign"] else ""),
+          f"- 다듬기·번역: {sub_info['engine']}",
+          f"- 영상에 직접 넣음: {'예' if sub_info['burned'] else '아니요 (srt 파일만)'}"]
     L += ["", "## 설명 일러스트 (편집본 기준)", ""]
     L += [f"- {_fmt(o['start'])} ~ {_fmt(o['end'])}: {o['concept']} (`{os.path.basename(o['png'])}`)"
           for o in overlays] or ["- 없음"]
