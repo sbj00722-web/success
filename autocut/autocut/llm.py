@@ -1,5 +1,6 @@
 """Claude API 호출 공통부."""
 import json
+import os
 
 import anthropic
 
@@ -54,3 +55,34 @@ def ask(model: str, system: str, content, effort: str = "high", schema: dict = N
 
 def ask_json(model: str, system: str, content, schema: dict, effort: str = "high", **kw):
     return json.loads(ask(model, system, content, effort=effort, schema=schema, **kw))
+
+
+def ask_json_any(settings, system: str, text: str, schema: dict):
+    """Claude 로 먼저, 안 되면(키·크레딧 없음) OpenAI 로. (결과, 사용한 곳) 을 돌려줌."""
+    problems = []
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            return ask_json(settings.claude_model, system, text, schema, effort=settings.claude_effort), "Claude"
+        except LLMError as e:
+            problems.append(str(e))
+    if os.environ.get("OPENAI_API_KEY"):
+        import openai
+        try:
+            r = openai.OpenAI().chat.completions.create(
+                model=settings.openai_text_model,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": text}],
+                response_format={"type": "json_schema",
+                                 "json_schema": {"name": "result", "strict": True, "schema": schema}},
+            )
+            return json.loads(r.choices[0].message.content), "OpenAI"
+        except openai.APIStatusError as e:
+            msg = str(e).lower()
+            if e.status_code == 429 and ("credit" in msg or "quota" in msg):
+                problems.append("OpenAI 크레딧이 부족해요 (platform.openai.com → Billing 에서 충전)")
+            elif e.status_code == 401:
+                problems.append("OpenAI API 키가 맞지 않아요 (.env 의 OPENAI_API_KEY 확인)")
+            else:
+                problems.append(f"OpenAI API 오류 {e.status_code}")
+        except openai.APIConnectionError:
+            problems.append("OpenAI 서버에 연결하지 못했어요 (인터넷 연결 확인)")
+    raise LLMError(" / ".join(problems) or "API 키가 없어요")

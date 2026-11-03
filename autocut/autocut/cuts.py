@@ -45,11 +45,11 @@ def silence_cuts(audio: np.ndarray, sr: int, threshold_db: float, min_len: float
 # ---------------------------------------------------------------- 필러워드
 
 def filler_cuts(segments: list, fillers: list):
-    fillers = {norm(f) for f in fillers}
+    fillers = {norm(f).lower() for f in fillers}
     words = [w for seg in segments for w in seg["words"]]
     cuts = []
     for k, w in enumerate(words):
-        if norm(w["word"]) not in fillers:
+        if norm(w["word"]).lower() not in fillers:
             continue
         # Whisper 단어 경계가 겹치는 경우가 있어, 앞뒤 단어를 침범하지 않게 자름
         s = max(w["start"], words[k - 1]["end"]) if k > 0 else w["start"]

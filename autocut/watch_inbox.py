@@ -102,8 +102,9 @@ def main():
                 result = run(local, work_out, settings_from(args))
                 if os.path.abspath(out) != os.path.abspath(work_out):
                     print("결과물을 올리는 중...")
-                    for key in ("video", "srt", "report"):
-                        shutil.copy2(result[key], os.path.join(out, os.path.basename(result[key])))
+                    for key in ("video", "srt", "srt_original", "report"):
+                        if result.get(key):
+                            shutil.copy2(result[key], os.path.join(out, os.path.basename(result[key])))
                 move(v, done)
                 print(f"=== 끝! 결과는 {out} 폴더, 원본은 done 폴더로 옮겼어요 ===")
             except Exception:

@@ -29,6 +29,9 @@ def parser(with_videos: bool = True):
                    help="설명 그림을 그릴 AI (auto: OpenAI 키가 있으면 OpenAI)")
     p.add_argument("--blur-faces", dest="blur_faces", action="store_const", const=True, help="얼굴 모자이크")
     p.add_argument("--ocr-every", dest="ocr_every", type=float, help="화면 글자 검사 간격(초)")
+    p.add_argument("--language", dest="language", help="auto(언어 자동, 기본) 또는 ko, en 등으로 고정")
+    off("--no-burn-subtitles", "burn_subtitles", "영상에 자막 넣지 않기 (srt 파일만)")
+    off("--no-subtitle-polish", "subtitle_polish", "AI 자막 다듬기·번역 끄기")
     return p
 
 

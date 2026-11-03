@@ -13,3 +13,5 @@ resvg-py>=0.2
 imageio-ffmpeg>=0.5
 gradio>=5
 truststore
+transformers>=4.44   # 자막 번역 (AI API 를 못 쓸 때 PC 안에서)
+sentencepiece

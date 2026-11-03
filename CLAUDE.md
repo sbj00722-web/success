@@ -30,14 +30,15 @@
 |---|---|
 | `config.py` | 모든 설정값(`Settings`) |
 | `media.py` | ffmpeg 호출 (imageio-ffmpeg 내장 바이너리, ffprobe 없이 `ffmpeg -i` 파싱) |
-| `transcribe.py` | faster-whisper, 결과를 `transcript.json` 에 캐시 |
+| `transcribe.py` | faster-whisper, `language=auto` 면 말소리 덩어리(VAD)마다 언어 감지. 결과를 `transcript.json` 에 캐시 |
 | `cuts.py` | 무음/필러 컷, 문장 위치 찾기, 원본↔편집본 시간 변환(`Timeline`) |
 | `llm.py` | Claude API 공통 호출 (스트리밍 + 구조화 출력 + 서버 측 fallback) |
 | `planner.py` | 대본 → NG 컷 / 일러스트 위치 / 말한 개인정보 계획 |
 | `illustrate.py` | OpenAI 이미지(한글 라벨은 PIL 로 직접) 또는 Claude SVG → resvg PNG, 결과를 Claude 가 재검토 |
 | `privacy.py` | EasyOCR + 정규식(+Claude) 개인정보 탐지, 모자이크, 삐- 소리, 얼굴 모자이크(YuNet, `models/` 에 자동 다운로드) |
 | `__main__.py` | 명령줄 옵션 (`python -m autocut`, `watch_inbox.py` 도 같은 옵션 사용) |
-| `render.py` | 프레임 단위 합성(컷·모자이크·일러스트) 후 libx264 인코딩 |
+| `subtitles.py` | 자막 줄 나누기, AI 다듬기·번역(Claude → OpenAI → PC 번역 NLLB), srt, 영상에 직접 넣기(`Burner`) |
+| `render.py` | 프레임 단위 합성(컷·모자이크·일러스트·자막) 후 인코딩 |
 | `pipeline.py` | 전체 순서 조립, srt·리포트 작성 |
 
 ## 규칙
