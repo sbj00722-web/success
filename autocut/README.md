@@ -19,13 +19,13 @@
 
 | 이름 | 하는 일 |
 |---|---|
-| `claude_success/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 끝난 원본은 `claude_success/done/`, 실패하면 `claude_success/failed/` (`.env` 의 `IN_DIR` 로 다른 폴더 지정 가능) |
-| `output/` | 결과물. 중간 파일(대본, 편집 계획, 그림, OCR 결과)은 `output/<영상이름>_work/` |
+| 구글 드라이브 `내 드라이브/claude_success/` | 여기에 영상을 넣으면 `watch.bat` 이 자동 처리. 결과물은 `claude_success/output/`, 끝난 원본은 `claude_success/done/`, 실패하면 `claude_success/failed/` |
+| `output/` | PC 안 작업 폴더이자 `run.bat`·명령줄 결과물. 중간 파일(대본, 편집 계획, 그림, OCR 결과)은 `output/<영상이름>_work/` |
 | `samples/` | 시험용 영상 (`test_video.mp4`) |
 | `autocut/` | 프로그램 본체 |
 | `.env.example` | API 키 적는 양식 → `.env` 로 복사해서 사용 |
 | `run.bat` | 영상을 끌어다 놓으면 편집. 그냥 더블클릭하면 편집기 화면 |
-| `watch.bat` | `claude_success/` 지켜보기 시작 |
+| `watch.bat` | 구글 드라이브 `claude_success/` 지켜보기 시작 |
 | `실행.bat` | 편집기 화면 열기 |
 
 ## 처음 한 번 설정: API 키
@@ -54,7 +54,9 @@ VIDEO_CODEC=libx264   # 그래픽카드 인코딩 끄기
 
 ## 실행 방법 3가지
 
-1. **폴더 자동 처리**: `watch.bat` 을 켜 두고 영상을 `claude_success/` 에 넣기 → 결과는 `output/`
+1. **구글 드라이브 자동 처리**: `watch.bat` 을 켜 두고 영상을 구글 드라이브 `내 드라이브/claude_success/` 에 넣기 → 결과는 `claude_success/output/`
+   - PC 에 [구글 드라이브 앱(Google Drive for desktop)](https://www.google.com/drive/download/)이 설치·로그인돼 있어야 합니다 (보통 `G:\내 드라이브`). 휴대폰이나 다른 PC 에서 올려도 됩니다.
+   - 편집은 PC 안에서 하고 다 만든 결과물만 드라이브에 올립니다. 드라이브를 못 찾으면 `.env` 에 `GDRIVE_DIR=G:\내 드라이브` 처럼 적어 주세요.
 2. **끌어다 놓기**: 영상 파일을 `run.bat` 위에 끌어다 놓기 (여러 개 가능)
 3. **명령줄**:
 
