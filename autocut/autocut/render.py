@@ -50,7 +50,9 @@ def render(video, info, timeline, boxes, overlays, audio_wav, out_path, settings
 
     box_starts = [b[0] for b in boxes]
     total = int(timeline.duration * info.fps)
-    enc = media.open_encoder(out_path, info, audio_wav, settings.crf, settings.preset)
+    codec = media.pick_codec(settings)
+    log(f"  인코딩: {codec}" + (" (그래픽카드 사용)" if codec == "h264_nvenc" else ""))
+    enc = media.open_encoder(out_path, info, audio_wav, settings)
     written = 0
     try:
         for i, frame in enumerate(media.iter_frames(video, info)):

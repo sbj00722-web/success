@@ -12,30 +12,34 @@ os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 _VERBATIM_PROMPT = "음, 어... 그러니까 음 이제 어, 시작해 볼게요. 음... 어 그게,"
 
 
-def _load_model(name: str, log):
+def _load_model(name: str, log, device: str = "auto"):
     from faster_whisper import WhisperModel
-    try:
-        # torch 를 먼저 import 하면 torch 에 들어 있는 cuBLAS/cuDNN DLL 을 ctranslate2 가 찾을 수 있음
-        import torch
-        if torch.cuda.is_available():
-            model = WhisperModel(name, device="cuda", compute_type="float16")
-            log(f"음성 인식 모델 {name} (GPU) 로드")
-            return model
-    except Exception as e:  # GPU 초기화 실패 시 CPU 로
-        log(f"GPU 사용 실패, CPU 로 진행합니다: {e}")
+    if device != "cpu":
+        try:
+            # torch 를 먼저 import 하면 torch 에 들어 있는 cuBLAS/cuDNN DLL 을 ctranslate2 가 찾을 수 있음
+            import torch
+            if torch.cuda.is_available() or device == "cuda":
+                model = WhisperModel(name, device="cuda", compute_type="float16")
+                log(f"음성 인식 모델 {name} (GPU) 로드")
+                return model
+        except Exception as e:  # GPU 초기화 실패 시 CPU 로 (cuda 를 직접 고른 경우는 오류)
+            if device == "cuda":
+                raise
+            log(f"GPU 사용 실패, CPU 로 진행합니다: {e}")
     model = WhisperModel(name, device="cpu", compute_type="int8")
     log(f"음성 인식 모델 {name} (CPU) 로드 - 시간이 오래 걸릴 수 있어요")
     return model
 
 
-def transcribe(audio_path: str, cache_path: str, model_name: str, language: str, log) -> list:
+def transcribe(audio_path: str, cache_path: str, model_name: str, language: str, log,
+               device: str = "auto") -> list:
     """[{id, start, end, text, words:[{start, end, word}]}]"""
     if os.path.exists(cache_path):
         log("이전 음성 인식 결과를 재사용합니다")
         with open(cache_path, encoding="utf-8") as f:
             return json.load(f)
 
-    model = _load_model(model_name, log)
+    model = _load_model(model_name, log, device)
     # 파일 경로 대신 배열을 넘김 (faster-whisper 내부 PyAV 디코더의 버전 호환 문제 회피)
     audio, _ = read_wav(audio_path)
     segments, info = model.transcribe(

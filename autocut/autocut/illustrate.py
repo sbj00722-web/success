@@ -173,7 +173,7 @@ def make_image(item: dict, w: int, h: int, out_png: str, settings, log):
 
     if settings.illustration_review and os.environ.get("ANTHROPIC_API_KEY"):
         try:
-            res = llm.ask_json(settings.model, IMAGE_REVIEW, [
+            res = llm.ask_json(settings.claude_model, IMAGE_REVIEW, [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                              "data": base64.standard_b64encode(png).decode()}},
                 {"type": "text", "text": f"Intent:\nConcept: {item['concept']}\nScene: {item['scene']}"},
@@ -196,7 +196,7 @@ def make_svg(item: dict, w: int, h: int, out_png: str, settings, log) -> str:
     prompt = (f"Canvas: {w}x{h}.\nConcept being explained (Korean): {item['concept']}\n"
               f"Scene: {item['scene']}\n"
               f"Label text: {item['label'] or '(none - no text at all)'}")
-    svg = _extract_svg(llm.ask(settings.model, system, prompt, effort=settings.effort))
+    svg = _extract_svg(llm.ask(settings.claude_model, system, prompt, effort=settings.claude_effort))
 
     for attempt in range(2):
         final = _wrap(svg, w, h)
@@ -206,9 +206,9 @@ def make_svg(item: dict, w: int, h: int, out_png: str, settings, log) -> str:
             if attempt:
                 raise
             log(f"    SVG 렌더링 오류, 다시 그립니다: {e}")
-            svg = _extract_svg(llm.ask(settings.model, system,
+            svg = _extract_svg(llm.ask(settings.claude_model, system,
                                        prompt + f"\n\nYour previous SVG failed to render: {e}\nReturn a simpler valid SVG.",
-                                       effort=settings.effort))
+                                       effort=settings.claude_effort))
             continue
         break
 
@@ -216,10 +216,10 @@ def make_svg(item: dict, w: int, h: int, out_png: str, settings, log) -> str:
         with open(out_png, "rb") as f:
             png_b64 = base64.standard_b64encode(f.read()).decode()
         review_sys = REVIEW.replace("{font}", settings.font_family).replace("{w}", str(w)).replace("{h}", str(h))
-        res = llm.ask_json(settings.model, review_sys, [
+        res = llm.ask_json(settings.claude_model, review_sys, [
             {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": png_b64}},
             {"type": "text", "text": f"Intent:\n{prompt}\n\nSVG:\n{svg}"},
-        ], REVIEW_SCHEMA, effort=settings.effort)
+        ], REVIEW_SCHEMA, effort=settings.claude_effort)
         if not res["ok"] and "<svg" in res["svg"]:
             log(f"    검토 후 수정: {res['problems']}")
             try:

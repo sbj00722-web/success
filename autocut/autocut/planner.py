@@ -76,5 +76,5 @@ def plan(segments: list, settings) -> dict:
                + "\n".join(lines)
                + "\n\nsummary 에는 영상 주제를 한두 문장으로 씁니다.")
     max_ill = settings.max_illustrations if settings.illustrations else 0
-    return llm.ask_json(settings.model, SYSTEM.replace("{max_ill}", str(max_ill)), content,
-                        SCHEMA, effort=settings.effort)
+    return llm.ask_json(settings.claude_model, SYSTEM.replace("{max_ill}", str(max_ill)), content,
+                        SCHEMA, effort=settings.claude_effort)

@@ -24,6 +24,7 @@
 - `.bat` 파일에는 한글을 쓰지 않음
 - 새 라이브러리를 추가하면 `autocut/requirements.txt` 에도 적기
 - API 키는 `autocut/.env` 에서 읽음 (`autocut/__init__.py` 의 `load_dotenv`). 양식은 `.env.example`
+- 설정값은 `Settings.from_env()` 로 만들기 (`.env` 의 대문자 이름이 기본값을 덮어씀). 새 설정을 추가하면 `.env.example` 에도 적기
 
 ## 금지 사항
 - `.env` 등 비밀 정보 커밋 금지 (`.env.example` 은 빈 양식이라 커밋함)

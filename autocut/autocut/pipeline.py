@@ -20,7 +20,7 @@ def _srt_time(t: float) -> str:
 
 
 def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
-    settings = settings or Settings()
+    settings = settings or Settings.from_env()
     t_start = time.time()
     if not os.environ.get("ANTHROPIC_API_KEY"):
         log("ANTHROPIC_API_KEY 가 없어서 Claude 단계(NG 컷·설명 그림·말한 개인정보)는 건너뜁니다.")
@@ -42,14 +42,16 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     # 2. 대본
     log("② 음성 인식 중...")
     segments = transcribe.transcribe(a16, os.path.join(work, "transcript.json"),
-                                     settings.whisper_model, settings.language, log)
+                                     settings.whisper_model, settings.language, log,
+                                     settings.whisper_device)
     seg_by_id = {s["id"]: s for s in segments}
 
     # 3. 1차 컷: 무음 + 필러
     all_cuts = []
     audio16, sr16 = media.read_wav(a16)
     if settings.cut_silence:
-        sc = C.silence_cuts(audio16, sr16, settings.silence_db, settings.min_silence, settings.silence_pad)
+        # 자른 자리 앞뒤로 절반씩 남겨서 합치면 keep_silence 만큼의 쉼이 됨
+        sc = C.silence_cuts(audio16, sr16, settings.silence_db, settings.min_silence, settings.keep_silence / 2)
         log(f"③ 무음 구간 {len(sc)}개 ({sum(e - s for s, e, _ in sc):.1f}초)")
         all_cuts += sc
     if settings.cut_fillers:
@@ -139,7 +141,7 @@ def run(video: str, out_dir: str, settings: Settings = None, log=print) -> dict:
     if settings.pii_screen:
         # 같은 영상을 같은 설정으로 다시 돌리면 OCR 결과를 재사용 (가장 오래 걸리는 단계)
         cache = os.path.join(work, "screen_pii.json")
-        key = [settings.ocr_fps, settings.ocr_width, settings.pii_llm_check]
+        key = [settings.ocr_every, settings.ocr_width, settings.pii_llm_check]
         cached = json.load(open(cache, encoding="utf-8")) if os.path.exists(cache) else {}
         if cached.get("key") == key:
             boxes = [tuple(b) for b in cached["boxes"]]

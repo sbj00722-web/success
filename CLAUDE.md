@@ -17,6 +17,7 @@
 
 - 환경: Windows 11, Python 3.12 가상환경 `autocut/.venv`, GPU RTX 3070 (CUDA torch)
 - API 키: `autocut/.env` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), 양식은 `autocut/.env.example`. 키가 없거나 크레딧이 없으면 해당 단계만 건너뜀
+- 설정: `Settings` 의 모든 필드를 `.env` 에서 대문자 이름으로 바꿀 수 있음 (`Settings.from_env()`). 우선순위는 기본값 < `.env` < 화면/명령줄. 필드를 추가하면 `.env.example` 에도 적기
 - 사용자용 실행: `autocut/실행.bat` 더블클릭 → `launch.py` 가 API 키 확인 후 Gradio 화면(`app.py`) 실행
 - 끌어다 놓기: `autocut/run.bat`, 자동 처리: `autocut/watch.bat` → `watch_inbox.py` 가 `inbox/` 감시, 원본은 `inbox/done/`
 - 명령줄: `cd autocut` 후 `.venv/Scripts/python.exe -m autocut samples/test_video.mp4` (`cli.py` 도 같음)

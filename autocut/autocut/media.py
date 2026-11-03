@@ -125,11 +125,36 @@ def sample_frames(src: str, every_sec: float, width: int):
         proc.wait()
 
 
-def open_encoder(dst: str, info: VideoInfo, audio_wav: str, crf: int, preset: str):
+_nvenc = None
+
+
+def has_nvenc() -> bool:
+    """NVIDIA 그래픽카드 인코더(h264_nvenc)를 쓸 수 있는지 아주 짧은 영상으로 시험 (한 번만)"""
+    global _nvenc
+    if _nvenc is None:
+        p = subprocess.run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                            "-i", "color=c=black:s=256x256:d=0.1", "-c:v", "h264_nvenc", "-f", "null", "-"],
+                           capture_output=True)
+        _nvenc = p.returncode == 0
+    return _nvenc
+
+
+def pick_codec(settings) -> str:
+    if settings.video_codec == "auto":
+        return "h264_nvenc" if has_nvenc() else "libx264"
+    return settings.video_codec
+
+
+def open_encoder(dst: str, info: VideoInfo, audio_wav: str, settings):
+    codec = pick_codec(settings)
+    q = str(settings.video_quality)
+    if codec == "h264_nvenc":
+        video = ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", q, "-b:v", "0"]
+    else:
+        video = ["-c:v", codec, "-preset", settings.video_preset, "-crf", q]
     cmd = [ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
            "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{info.width}x{info.height}",
            "-r", info.fps_str, "-i", "-", "-i", audio_wav,
-           "-map", "0:v", "-map", "1:a",
-           "-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p",
+           "-map", "0:v", "-map", "1:a", *video, "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", dst]
     return subprocess.Popen(cmd, stdin=subprocess.PIPE)

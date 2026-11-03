@@ -49,7 +49,7 @@ def screen_pii(video: str, info, settings, log):
     import torch
 
     reader = easyocr.Reader(["ko", "en"], gpu=torch.cuda.is_available(), verbose=False)
-    step = 1.0 / settings.ocr_fps
+    step = settings.ocr_every
     ocr_w = min(settings.ocr_width, info.width)
     scale = info.width / ocr_w
     total = max(1, int(info.duration / step))
@@ -75,7 +75,7 @@ def screen_pii(video: str, info, settings, log):
         uniq = sorted({text for _, _, text in hits})[:1500]
         listing = "\n".join(f"{i}: {s}" for i, s in enumerate(uniq))
         try:
-            res = llm.ask_json(settings.model, LLM_SYSTEM, listing, LLM_SCHEMA, effort="medium")
+            res = llm.ask_json(settings.claude_model, LLM_SYSTEM, listing, LLM_SCHEMA, effort="medium")
             bad = {uniq[i] for i in res["pii_indices"] if 0 <= i < len(uniq)}
             for i, (_, _, text) in enumerate(hits):
                 if text in bad and i not in flagged:
